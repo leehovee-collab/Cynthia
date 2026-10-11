@@ -70,11 +70,15 @@
   <p class="pill">{{ boxes_sold }} of {{ cap }} boxes sold</p>
   <p class="week-nav">
     <a href="{{ url_for('admin', week=prev_week.isoformat()) }}">&larr; Previous week</a>
-    {% if not is_this_week %}
-      <a href="{{ url_for('admin') }}">This week</a>
-      <a href="{{ url_for('admin', week=next_week.isoformat()) }}">Next week &rarr;</a>
-    {% endif %}
+    {% if not is_this_week %}<a href="{{ url_for('admin') }}">This week</a>{% endif %}
+    <a href="{{ url_for('admin', week=next_week.isoformat()) }}">Next week &rarr;</a>
   </p>
+  {% if is_this_week and upcoming_orders %}
+    <p class="hint">
+      {{ upcoming_orders }} order{{ '' if upcoming_orders == 1 else 's' }} already in for next week ·
+      <a href="{{ url_for('admin', week=next_week.isoformat()) }}">view</a>
+    </p>
+  {% endif %}
 </section>
 
 {% for message in get_flashed_messages() %}

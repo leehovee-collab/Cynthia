@@ -5,15 +5,19 @@
 {% if not is_open %}
   <section class="card notice">
     <h1>Orders are closed</h1>
-    <p>We take pre-orders each week until {{ close_day }} at 23:59.</p>
-    <p>Orders open again on <strong>{{ next_open|nice_date }}</strong>. See you then!</p>
+    <p>Orders open <strong>{{ next_open|nice_date }}</strong>,
+       {{ 'collection or delivery' if delivery_available else 'collection' }}
+       <strong>{{ next_collection|nice_date }}</strong>.</p>
+    <p class="hint">We take pre-orders each week until {{ close_day }} at 23:59. See you then!</p>
   </section>
 
 {% elif boxes_left <= 0 %}
   <section class="card notice">
     <h1>Sold out</h1>
     <p>Every box for this week has been ordered. Thank you!</p>
-    <p>Orders open again on <strong>{{ next_open|nice_date }}</strong>.</p>
+    <p>Orders open again <strong>{{ next_open|nice_date }}</strong>,
+       {{ 'collection or delivery' if delivery_available else 'collection' }}
+       <strong>{{ next_collection|nice_date }}</strong>.</p>
   </section>
 
 {% else %}

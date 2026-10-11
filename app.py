@@ -256,10 +256,13 @@ def orders_open():
     return FORCE_OPEN or ORDERS_OPEN_DAY <= now_uk().weekday() <= ORDERS_CLOSE_DAY
 
 
-def next_opening_date():
-    today = now_uk().date()
-    days_ahead = (ORDERS_OPEN_DAY - today.weekday()) % 7 or 7
-    return today + timedelta(days=days_ahead)
+def ordering_week_start():
+    """The Monday of the week that new orders belong to. Once this week's
+    ordering has closed (Thursday onwards), that is next week."""
+    week_start = current_week_start()
+    if now_uk().weekday() > ORDERS_CLOSE_DAY:
+        week_start += timedelta(days=7)
+    return week_start
 
 
 def collection_date(week_start):
@@ -293,7 +296,7 @@ def money(pence):
 def nice_date(d):
     if isinstance(d, str):
         d = date.fromisoformat(d)
-    return f"{DAY_NAMES[d.weekday()]} {d.day} {d:%B}"
+    return f"{DAY_NAMES[d.weekday()]} {d.day} {d:%b}"
 
 
 def full_address(order):
@@ -590,10 +593,14 @@ def scheduled_bake_sheet():
 # ----------------------------------------------------------------------------
 
 def render_order_page(errors=None, form=None):
-    week_start = current_week_start()
+    week_start = ordering_week_start()
+    is_open = orders_open()
+    # The next week customers can order for: the coming one if we're closed,
+    # or the one after if this one is open but sold out.
+    next_week = week_start + timedelta(days=7) if is_open else week_start
     return render_template(
         "index.html",
-        is_open=orders_open(),
+        is_open=is_open,
         boxes_left=max(WEEKLY_BOX_CAP - boxes_sold(get_db(), week_start), 0),
         products=PRODUCTS,
         box_sizes=BOX_SIZES,
@@ -601,7 +608,8 @@ def render_order_page(errors=None, form=None):
         max_per_choice=MAX_BOXES_PER_CHOICE,
         allergen_note=ALLERGEN_NOTE,
         collection=collection_date(week_start),
-        next_open=next_opening_date(),
+        next_open=next_week + timedelta(days=ORDERS_OPEN_DAY),
+        next_collection=collection_date(next_week),
         close_day=DAY_NAMES[ORDERS_CLOSE_DAY],
         delivery_available=bool(BAKERY_POSTCODE),
         delivery_fee_pence=DELIVERY_FEE_PENCE,
@@ -698,7 +706,7 @@ def place_order():
     # Check the cap and save in one locked step, so two people ordering at the
     # same moment can't both take the last box.
     db = get_db()
-    week_start = current_week_start()
+    week_start = ordering_week_start()
     db.execute("BEGIN IMMEDIATE")
     try:
         left = WEEKLY_BOX_CAP - boxes_sold(db, week_start)
@@ -798,8 +806,17 @@ def admin():
     except ValueError:
         week_start = this_week
 
+    # From Thursday, new orders (only possible with FORCE_OPEN) go into next week.
+    upcoming = ordering_week_start()
+    upcoming_orders = 0
+    if upcoming != this_week:
+        upcoming_orders = get_db().execute(
+            "SELECT COUNT(*) FROM orders WHERE week_start = ?", (upcoming.isoformat(),)
+        ).fetchone()[0]
+
     return render_template(
         "admin.html",
+        upcoming_orders=upcoming_orders,
         week_start=week_start,
         is_this_week=week_start == this_week,
         prev_week=week_start - timedelta(days=7),
