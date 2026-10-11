@@ -39,6 +39,14 @@
 
     {% for product in products %}
       <section class="card product">
+        {% if images.get(product.id) %}
+          <img class="product-image" src="{{ images[product.id] }}" alt="{{ product.name }}" loading="lazy">
+        {% else %}
+          <div class="product-image product-placeholder" aria-hidden="true">
+            <span class="placeholder-name">Cynthia's</span>
+            <span class="placeholder-tag">Freshly baked</span>
+          </div>
+        {% endif %}
         <h3>{{ product.name }}</h3>
         <p>{{ product.description }}</p>
         <p class="allergens"><strong>Allergens:</strong> {{ product.allergens }}</p>

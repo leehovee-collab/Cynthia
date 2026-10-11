@@ -98,6 +98,39 @@ p { margin: 0 0 8px; }
 
 /* Products */
 .product { border-top: 3px solid var(--gold); }
+.product-image {
+  display: block;
+  width: calc(100% + 36px);
+  max-width: none;
+  margin: -18px -18px 16px;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  border-radius: 11px 11px 0 0;
+}
+.product-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background:
+    radial-gradient(circle at 20% 20%, rgba(255, 255, 255, 0.7), transparent 55%),
+    linear-gradient(135deg, rgba(200, 36, 107, 0.16), rgba(184, 149, 90, 0.26));
+}
+.placeholder-name {
+  font-family: 'Dancing Script', cursive;
+  font-weight: 700;
+  font-size: 2.4rem;
+  line-height: 1;
+  color: var(--pink);
+}
+.placeholder-tag {
+  margin-top: 8px;
+  font-weight: 200;
+  font-size: 0.7rem;
+  letter-spacing: 0.4em;
+  text-transform: uppercase;
+  color: var(--gold);
+}
 .allergens { font-size: 0.85rem; }
 .size-row {
   display: flex;

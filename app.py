@@ -34,23 +34,30 @@ BOX_SIZES = [4, 6, 12]
 # The most boxes of one product + size a customer can add in a single order.
 MAX_BOXES_PER_CHOICE = 5
 
-# Each product. "kind" must be "roll" or "cookie" (used for the bake sheet).
+# Each product. "kind" must be "roll", "cookie" or "traybake" (used for the
+# bake sheet; traybakes are counted in squares).
+# "image" is optional: put a photo in the static/images folder and type its
+# file name here, e.g. "image": "classic-roll.jpg". Leave it as "" for none.
 # Prices are in pounds, one price per box size. THESE ARE PLACEHOLDERS.
 # Allergens are PLACEHOLDERS too - check them against your real ingredients.
+# If you ever replace a product, give the new one a new "id" so old orders
+# aren't mixed up with it.
 PRODUCTS = [
     {
         "id": "classic-roll",
         "name": "Classic Cinnamon Roll",
         "kind": "roll",
+        "image": "",
         "description": "Soft, fluffy rolls with cinnamon sugar and cream cheese frosting.",
         "allergens": "Wheat (gluten), milk, egg",
         "prices": {4: 12.00, 6: 17.00, 12: 32.00},
     },
     {
-        "id": "biscoff-roll",
-        "name": "Lotus Biscoff Cinnamon Roll",
-        "kind": "roll",
-        "description": "Our classic roll topped with Biscoff spread and biscuit crumb.",
+        "id": "cookies-cream-traybake",
+        "name": "Cookies & Cream Traybake",
+        "kind": "traybake",
+        "image": "",
+        "description": "Soft vanilla traybake loaded with cookie pieces and a creamy topping.",
         "allergens": "Wheat (gluten), milk, egg, soya",
         "prices": {4: 14.00, 6: 20.00, 12: 38.00},
     },
@@ -58,19 +65,28 @@ PRODUCTS = [
         "id": "nyc-cookie",
         "name": "NYC Chocolate Chip Cookie",
         "kind": "cookie",
+        "image": "",
         "description": "Thick, gooey New York style cookies loaded with chocolate chips.",
         "allergens": "Wheat (gluten), milk, egg, soya",
         "prices": {4: 10.00, 6: 14.00, 12: 26.00},
     },
     {
-        "id": "biscoff-cookie",
-        "name": "Biscoff Stuffed Cookie",
-        "kind": "cookie",
-        "description": "Chunky cookies with a melting Biscoff centre.",
+        "id": "fudge-traybake",
+        "name": "Fudge Traybake",
+        "kind": "traybake",
+        "image": "",
+        "description": "Rich, soft traybake squares topped with a thick layer of fudge.",
         "allergens": "Wheat (gluten), milk, egg, soya",
         "prices": {4: 12.00, 6: 17.00, 12: 32.00},
     },
 ]
+
+# Products no longer on sale. Old orders that contain them still show on the
+# admin page and are counted under the right heading on the bake sheet.
+RETIRED_PRODUCT_KINDS = {
+    "biscoff-roll": "roll",
+    "biscoff-cookie": "cookie",
+}
 
 # Shown under the menu.
 ALLERGEN_NOTE = (
@@ -138,7 +154,7 @@ METRES_PER_MILE = 1609.344
 
 UK = ZoneInfo("Europe/London")
 DAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
-KIND_LABELS = {"roll": "rolls", "cookie": "cookies"}
+KIND_LABELS = {"roll": "rolls", "cookie": "cookies", "traybake": "squares"}
 PRODUCTS_BY_ID = {p["id"]: p for p in PRODUCTS}
 
 app = Flask(__name__)
@@ -335,7 +351,12 @@ def week_summary(db, week_start):
             continue
         row = bake.setdefault(
             item["product_id"],
-            {"name": item["product_name"], "kind": "", "boxes": {s: 0 for s in BOX_SIZES}, "pieces": 0},
+            {
+                "name": item["product_name"],
+                "kind": RETIRED_PRODUCT_KINDS.get(item["product_id"], ""),
+                "boxes": {s: 0 for s in BOX_SIZES},
+                "pieces": 0,
+            },
         )
         row["boxes"][item["box_size"]] = row["boxes"].get(item["box_size"], 0) + item["quantity"]
         row["pieces"] += item["box_size"] * item["quantity"]
@@ -598,8 +619,15 @@ def render_order_page(errors=None, form=None):
     # The next week customers can order for: the coming one if we're closed,
     # or the one after if this one is open but sold out.
     next_week = week_start + timedelta(days=7) if is_open else week_start
+    # A photo is only used if the file is really there; otherwise the card shows a placeholder.
+    images = {
+        p["id"]: url_for("static", filename="images/" + p["image"])
+        for p in PRODUCTS
+        if p.get("image") and os.path.isfile(os.path.join(app.static_folder, "images", p["image"]))
+    }
     return render_template(
         "index.html",
+        images=images,
         is_open=is_open,
         boxes_left=max(WEEKLY_BOX_CAP - boxes_sold(get_db(), week_start), 0),
         products=PRODUCTS,
