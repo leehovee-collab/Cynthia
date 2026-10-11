@@ -1,0 +1,148 @@
+{% extends "base.html" %}
+{% block title %}Admin{% endblock %}
+
+{% macro order_card(order) %}
+  <section class="card order {{ 'is-cancelled' if order.cancelled }}" id="order-{{ order.id }}">
+    <div class="order-head">
+      <strong>{{ reference(order.id) }}</strong>
+      <span>{{ order.total_pence|money }}</span>
+    </div>
+    <p class="badges">
+      {% if order.cancelled %}<span class="badge badge-cancelled">Cancelled</span>{% endif %}
+      <span class="badge {{ 'badge-yes' if order.paid else 'badge-no' }}">{{ 'Paid' if order.paid else 'Not paid' }}</span>
+      {% if order.method == 'delivery' %}
+        <span class="badge {{ 'badge-yes' if order.collected else 'badge-no' }}">{{ 'Delivered' if order.collected else 'Not delivered' }}</span>
+      {% else %}
+        <span class="badge {{ 'badge-yes' if order.collected else 'badge-no' }}">{{ 'Collected' if order.collected else 'Not collected' }}</span>
+      {% endif %}
+    </p>
+    <p>
+      <strong>{{ order.name }}</strong> · <a href="tel:{{ order.phone }}">{{ order.phone }}</a>
+      {% if order.email %}<br><a href="mailto:{{ order.email }}">{{ order.email }}</a>{% endif %}
+    </p>
+    <p>Slot: <strong>{{ order.slot }}</strong></p>
+    {% if order.method == 'delivery' %}
+      <p>
+        Deliver to: <strong>{{ full_address(order) }}</strong>
+        · <a href="{{ maps_link(order) }}" target="_blank" rel="noopener">Map</a><br>
+        {{ '%.1f'|format(order.distance_miles or 0) }} miles one way,
+        {{ '%.1f'|format((order.distance_miles or 0) * 2) }} round trip{{ ' (estimate)' if order.distance_estimated }}
+        {% if order.fuel_pence is not none %}
+          · fuel {{ '%.2f'|format(order.fuel_litres) }} litres, {{ order.fuel_pence|money }}
+        {% endif %}
+      </p>
+    {% endif %}
+    <ul class="lines">
+      {% for item in items_by_order.get(order.id, []) %}
+        <li>
+          <span>{{ item.quantity }} × {{ item.product_name }} <small>box of {{ item.box_size }}</small></span>
+          <span>{{ item.line_pence|money }}</span>
+        </li>
+      {% endfor %}
+      {% if order.delivery_fee_pence %}
+        <li><span>Delivery</span><span>{{ order.delivery_fee_pence|money }}</span></li>
+      {% endif %}
+    </ul>
+    {% if order.notes %}<p class="notes">“{{ order.notes }}”</p>{% endif %}
+    <div class="actions">
+      {% set done = 'delivered' if order.method == 'delivery' else 'collected' %}
+      {% for action, on_label, off_label in [
+          ('paid', 'Mark paid', 'Undo paid'),
+          ('collected', 'Mark ' ~ done, 'Undo ' ~ done),
+          ('cancelled', 'Cancel order', 'Restore order')] %}
+        <form method="post" action="{{ url_for('admin_update', order_id=order.id, action=action) }}">
+          <input type="hidden" name="week" value="{{ week_start.isoformat() }}">
+          <button type="submit" class="button small {{ 'outline' if order[action] }} {{ 'danger' if action == 'cancelled' }}">
+            {{ off_label if order[action] else on_label }}
+          </button>
+        </form>
+      {% endfor %}
+    </div>
+    <p class="hint">Ordered {{ order.created_at[:16].replace('T', ' ') }}</p>
+  </section>
+{% endmacro %}
+
+{% block content %}
+
+<section class="intro">
+  <h1>{{ 'This week' if is_this_week else 'Week of ' ~ week_start|nice_date }}</h1>
+  <p>Collection and delivery {{ collection|nice_date }}</p>
+  <p class="pill">{{ boxes_sold }} of {{ cap }} boxes sold</p>
+  <p class="week-nav">
+    <a href="{{ url_for('admin', week=prev_week.isoformat()) }}">&larr; Previous week</a>
+    {% if not is_this_week %}
+      <a href="{{ url_for('admin') }}">This week</a>
+      <a href="{{ url_for('admin', week=next_week.isoformat()) }}">Next week &rarr;</a>
+    {% endif %}
+  </p>
+</section>
+
+{% for message in get_flashed_messages() %}
+  <div class="card errors" role="status"><p>{{ message }}</p></div>
+{% endfor %}
+
+<h2>Bake sheet</h2>
+<section class="card">
+  <div class="kind-totals">
+    {% for label, pieces in kind_totals.items() %}
+      <div><strong>{{ pieces }}</strong> {{ label }}</div>
+    {% endfor %}
+  </div>
+  <table class="bake">
+    <thead>
+      <tr>
+        <th>Product</th>
+        {% for size in box_sizes %}<th>×{{ size }}</th>{% endfor %}
+        <th>Total</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in bake %}
+        <tr>
+          <td>{{ row.name }}</td>
+          {% for size in box_sizes %}<td>{{ row.boxes[size] or '·' }}</td>{% endfor %}
+          <td><strong>{{ row.pieces }}</strong></td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <p class="hint">The ×{{ box_sizes|join(', ×') }} columns are numbers of boxes. Cancelled orders are left out.</p>
+  <form method="post" action="{{ url_for('admin_send_bake_sheet') }}">
+    <input type="hidden" name="week" value="{{ week_start.isoformat() }}">
+    <button type="submit" class="button small outline">Send bake sheet now</button>
+  </form>
+  {% if not telegram_ready %}
+    <p class="hint">Telegram isn't set up yet, so nothing will be sent.</p>
+  {% endif %}
+</section>
+
+<h2>Orders ({{ orders|length }})</h2>
+<p class="hint">Takings {{ takings|money }} · still to be paid {{ unpaid|money }}</p>
+
+<h2>Deliveries ({{ delivery_orders|length }})</h2>
+{% if delivery_orders %}
+  <section class="card">
+    <div class="kind-totals">
+      <div><strong>{{ '%.1f'|format(delivery_miles) }}</strong> delivery miles</div>
+      <div><strong>{{ fuel_pence|money if fuel_pence is not none else '–' }}</strong> fuel cost</div>
+    </div>
+    <p class="hint">Each delivery is counted as its own round trip from the bakery. Cancelled orders are left out.
+      {% if fuel_pence is none %}Fuel cost needs CAR_MPG and FUEL_PRICE_PER_LITRE to be set.{% endif %}</p>
+  </section>
+  {% for order in delivery_orders %}{{ order_card(order) }}{% endfor %}
+{% else %}
+  <section class="card"><p>No deliveries this week.</p></section>
+{% endif %}
+
+<h2>Collections ({{ collection_orders|length }})</h2>
+{% for order in collection_orders %}
+  {{ order_card(order) }}
+{% else %}
+  <section class="card"><p>No collections this week.</p></section>
+{% endfor %}
+
+<form method="post" action="{{ url_for('admin_logout') }}" class="logout">
+  <button type="submit" class="button small outline">Log out</button>
+</form>
+
+{% endblock %}

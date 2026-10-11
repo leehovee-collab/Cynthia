@@ -1,0 +1,168 @@
+{% extends "base.html" %}
+{% block title %}Pre-order{% endblock %}
+{% block content %}
+
+{% if not is_open %}
+  <section class="card notice">
+    <h1>Orders are closed</h1>
+    <p>We take pre-orders each week until {{ close_day }} at 23:59.</p>
+    <p>Orders open again on <strong>{{ next_open|nice_date }}</strong>. See you then!</p>
+  </section>
+
+{% elif boxes_left <= 0 %}
+  <section class="card notice">
+    <h1>Sold out</h1>
+    <p>Every box for this week has been ordered. Thank you!</p>
+    <p>Orders open again on <strong>{{ next_open|nice_date }}</strong>.</p>
+  </section>
+
+{% else %}
+  <section class="intro">
+    <h1>This week's pre-orders</h1>
+    <p>{{ 'Collection or delivery' if delivery_available else 'Collect' }} on <strong>{{ collection|nice_date }}</strong>. Orders close {{ close_day }} 23:59.</p>
+    <p class="pill">{{ boxes_left }} box{{ '' if boxes_left == 1 else 'es' }} left this week</p>
+  </section>
+
+  {% if errors %}
+    <div class="card errors" id="errors" role="alert">
+      {% for error in errors %}<p>{{ error }}</p>{% endfor %}
+    </div>
+  {% endif %}
+
+  <form method="post" action="{{ url_for('place_order') }}" id="order-form" data-fee="{{ delivery_fee_pence }}">
+    <h2>1. Choose your boxes</h2>
+    <p class="hint">One flavour per box.</p>
+
+    {% for product in products %}
+      <section class="card product">
+        <h3>{{ product.name }}</h3>
+        <p>{{ product.description }}</p>
+        <p class="allergens"><strong>Allergens:</strong> {{ product.allergens }}</p>
+        {% for size in box_sizes %}
+          {% set field = 'qty_' ~ product.id ~ '_' ~ size %}
+          <div class="size-row">
+            <label for="{{ field }}">Box of {{ size }} <span class="price">{{ to_pence(product.prices[size])|money }}</span></label>
+            <div class="stepper">
+              <button type="button" data-step="-1" aria-label="One fewer box of {{ size }} {{ product.name }}">&minus;</button>
+              <input type="number" inputmode="numeric" id="{{ field }}" name="{{ field }}"
+                     min="0" max="{{ max_per_choice }}" value="{{ form.get(field, '0') or '0' }}"
+                     data-price="{{ to_pence(product.prices[size]) }}">
+              <button type="button" data-step="1" aria-label="One more box of {{ size }} {{ product.name }}">+</button>
+            </div>
+          </div>
+        {% endfor %}
+      </section>
+    {% endfor %}
+    <p class="hint">{{ allergen_note }}</p>
+
+    {% if delivery_available %}
+      <h2>2. Collection or delivery</h2>
+      <section class="card">
+        <div class="choice">
+          <label>
+            <input type="radio" name="method" value="collection" {{ 'checked' if form.get('method') != 'delivery' }}>
+            <span>Collection</span>
+          </label>
+          <label>
+            <input type="radio" name="method" value="delivery" {{ 'checked' if form.get('method') == 'delivery' }}>
+            <span>Delivery{% if delivery_fee_pence %} +{{ delivery_fee_pence|money }}{% endif %}</span>
+          </label>
+        </div>
+        <div id="delivery-fields">
+          <p class="hint">We deliver up to {{ max_delivery_miles }} miles from the bakery.</p>
+          <label for="address1">Address line 1</label>
+          <input type="text" id="address1" name="address1" maxlength="100" autocomplete="address-line1" value="{{ form.get('address1', '') }}">
+
+          <label for="town">Town</label>
+          <input type="text" id="town" name="town" maxlength="60" autocomplete="address-level2" value="{{ form.get('town', '') }}">
+
+          <label for="postcode">Postcode</label>
+          <input type="text" id="postcode" name="postcode" maxlength="10" autocomplete="postal-code" value="{{ form.get('postcode', '') }}">
+        </div>
+      </section>
+    {% endif %}
+
+    <h2>{{ '3' if delivery_available else '2' }}. Your details</h2>
+    <section class="card">
+      <label for="name">Name</label>
+      <input type="text" id="name" name="name" required maxlength="80" autocomplete="name" value="{{ form.get('name', '') }}">
+
+      <label for="phone">Phone</label>
+      <input type="tel" id="phone" name="phone" required maxlength="30" autocomplete="tel" value="{{ form.get('phone', '') }}">
+
+      <label for="email">Email <span class="optional">(optional)</span></label>
+      <input type="email" id="email" name="email" maxlength="120" autocomplete="email" value="{{ form.get('email', '') }}">
+
+      <label for="slot">Time slot · {{ collection|nice_date }}</label>
+      <select id="slot" name="slot" required>
+        <option value="">Choose a time…</option>
+        {% for slot in slots %}
+          <option value="{{ slot }}" {{ 'selected' if form.get('slot') == slot }}>{{ slot }}</option>
+        {% endfor %}
+      </select>
+
+      <label for="notes">Notes <span class="optional">(optional)</span></label>
+      <textarea id="notes" name="notes" rows="3" maxlength="500">{{ form.get('notes', '') }}</textarea>
+    </section>
+
+    <section class="card summary">
+      <div class="summary-line small" id="summary-fee" hidden>
+        <span>Delivery</span>
+        <span>{{ delivery_fee_pence|money }}</span>
+      </div>
+      <div class="summary-line">
+        <span id="summary-boxes">0 boxes</span>
+        <strong id="summary-total">£0.00</strong>
+      </div>
+      <p class="hint">Payment is by bank transfer. You'll get the details on the next page.</p>
+      <button type="submit" class="button">Place order</button>
+    </section>
+  </form>
+
+  <script>
+    (function () {
+      var form = document.getElementById('order-form');
+      var inputs = form.querySelectorAll('input[data-price]');
+      var fee = parseInt(form.dataset.fee, 10) || 0;
+      var deliveryFields = document.getElementById('delivery-fields');
+
+      function update() {
+        var boxes = 0, pence = 0;
+        inputs.forEach(function (input) {
+          var n = parseInt(input.value, 10) || 0;
+          boxes += n;
+          pence += n * parseInt(input.dataset.price, 10);
+        });
+
+        var chosen = form.querySelector('input[name="method"]:checked');
+        var delivery = !!chosen && chosen.value === 'delivery';
+        if (deliveryFields) {
+          deliveryFields.hidden = !delivery;
+          deliveryFields.querySelectorAll('input').forEach(function (input) { input.required = delivery; });
+        }
+        document.getElementById('summary-fee').hidden = !(delivery && fee);
+        if (delivery) pence += fee;
+
+        document.getElementById('summary-boxes').textContent = boxes + (boxes === 1 ? ' box' : ' boxes');
+        document.getElementById('summary-total').textContent = '£' + (pence / 100).toFixed(2);
+      }
+
+      form.addEventListener('click', function (event) {
+        var step = event.target.dataset.step;
+        if (!step) return;
+        var input = event.target.parentNode.querySelector('input');
+        var next = (parseInt(input.value, 10) || 0) + parseInt(step, 10);
+        input.value = Math.min(Math.max(next, 0), parseInt(input.max, 10));
+        update();
+      });
+      form.addEventListener('input', update);
+      form.addEventListener('change', update);
+      update();
+
+      var errors = document.getElementById('errors');
+      if (errors) errors.scrollIntoView();
+    })();
+  </script>
+{% endif %}
+
+{% endblock %}

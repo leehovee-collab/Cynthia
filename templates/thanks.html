@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block title %}Thank you{% endblock %}
+{% block content %}
+
+<section class="card notice">
+  <h1>Thank you, {{ order.name.split()[0] }}!</h1>
+  <p>Your order is in. Your reference is</p>
+  <p class="reference">{{ reference(order.id) }}</p>
+  {% if order.cancelled %}<p class="badge badge-cancelled">This order has been cancelled</p>{% endif %}
+</section>
+
+<section class="card">
+  <h2>How to pay</h2>
+  <p>Please send <strong>{{ order.total_pence|money }}</strong> by bank transfer, using
+     <strong>{{ reference(order.id) }}</strong> as the payment reference.</p>
+  {% if sort_code and account_number %}
+    <dl class="details">
+      {% if bank_name %}<dt>Pay to</dt><dd>{{ bank_name }}</dd>{% endif %}
+      <dt>Sort code</dt><dd>{{ sort_code }}</dd>
+      <dt>Account number</dt><dd>{{ account_number }}</dd>
+      <dt>Reference</dt><dd>{{ reference(order.id) }}</dd>
+      <dt>Amount</dt><dd>{{ order.total_pence|money }}</dd>
+    </dl>
+  {% else %}
+    <p>We'll message you the bank details shortly.</p>
+  {% endif %}
+  <p class="hint">Your order is confirmed once payment arrives.</p>
+</section>
+
+<section class="card">
+  <h2>Your order</h2>
+  <ul class="lines">
+    {% for item in items %}
+      <li>
+        <span>{{ item.quantity }} × {{ item.product_name }} <small>box of {{ item.box_size }}</small></span>
+        <span>{{ item.line_pence|money }}</span>
+      </li>
+    {% endfor %}
+    {% if order.delivery_fee_pence %}
+      <li><span>Delivery</span><span>{{ order.delivery_fee_pence|money }}</span></li>
+    {% endif %}
+    <li class="total"><span>Total</span><span>{{ order.total_pence|money }}</span></li>
+  </ul>
+  <dl class="details">
+    {% if order.method == 'delivery' %}
+      <dt>Delivery</dt><dd>{{ collection|nice_date }}, {{ order.slot }}</dd>
+      <dt>To</dt><dd>{{ full_address(order) }}</dd>
+    {% else %}
+      <dt>Collection</dt><dd>{{ collection|nice_date }}, {{ order.slot }}</dd>
+    {% endif %}
+    {% if order.notes %}<dt>Notes</dt><dd>{{ order.notes }}</dd>{% endif %}
+  </dl>
+  <p class="hint">Tip: screenshot this page so you have your reference handy.</p>
+</section>
+
+{% endblock %}

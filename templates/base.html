@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Pre-order{% endblock %} · Cynthia's Homemade Tea Cakes</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Dancing+Script:wght@600;700&family=Raleway:wght@200;400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <header class="brand">
+    <a href="{{ url_for('index') }}">
+      <span class="brand-name">Cynthia's</span>
+      <span class="brand-tag">Homemade Tea Cakes</span>
+    </a>
+    <span class="brand-rule"></span>
+  </header>
+  <main>
+    {% block content %}{% endblock %}
+  </main>
+  <footer>Baked fresh to order · Collection only</footer>
+</body>
+</html>

@@ -1,0 +1,12 @@
+# Secrets
+.env
+
+# Orders database
+orders.db
+*.db
+*.db-journal
+
+# Python
+venv/
+__pycache__/
+*.pyc

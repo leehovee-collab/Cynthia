@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}Admin{% endblock %}
+{% block content %}
+
+<section class="card">
+  <h1>Admin</h1>
+  {% if not configured %}
+    <p>The admin page is switched off because no <strong>ADMIN_KEY</strong> has been set.</p>
+    <p class="hint">Add ADMIN_KEY to your .env file (or Railway variables) and restart the app.</p>
+  {% else %}
+    {% if wrong %}<p class="errors-inline">That key isn't right.</p>{% endif %}
+    <form method="post" action="{{ url_for('admin_login') }}">
+      <label for="key">Admin key</label>
+      <input type="password" id="key" name="key" required autofocus autocomplete="current-password">
+      <button type="submit" class="button">Log in</button>
+    </form>
+  {% endif %}
+</section>
+
+{% endblock %}
